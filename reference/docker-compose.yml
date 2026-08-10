@@ -1,17 +1,25 @@
-version: "3.9"
-
 # ============================================================
 # MedComplyAI - Full Stack Docker Compose
 #
 # Services:
-#   - backend   : FastAPI (port 8000)
-#   - frontend  : Next.js  (port 3000)
-#   - qdrant    : Vector DB (port 6333)
-#   - ollama    : Local LLM inference (port 11434)
-#   - langfuse  : LLM Observability (port 3030)  [optional]
+#   - qdrant    : Vector DB (port 6333)          public image
+#   - ollama    : Local LLM inference (11434)    public image
+#   - backend   : FastAPI (port 8000)            private image, auth required
+#   - frontend  : Next.js  (port 3000)           private image, auth required
 #
-# Quick start:
+# Observability (Langfuse) is a separate overlay file, see
+# docker-compose.observability.yml.
+#
+# MedComplyAI is closed source. The backend and frontend images are
+# published privately, so qdrant and ollama start for anyone while
+# backend and frontend need registry access:
+#
+#   gh auth token | docker login ghcr.io -u <your-github-user> --password-stdin
+#   cp .env.example .env
 #   docker compose up -d
+#
+# Without that login, `docker compose up -d` starts qdrant and ollama
+# and fails to pull backend and frontend. That is expected.
 # ============================================================
 
 services:
@@ -32,7 +40,9 @@ services:
       QDRANT__SERVICE__HTTP_PORT: 6333
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      # The qdrant image ships no curl or wget. It does ship bash, so probe
+      # over /dev/tcp instead of assuming an HTTP client exists.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,16 +59,13 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
-    # GPU support — comment out if no GPU available
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # GPU is opt-in via docker-compose.gpu.yml. Declaring an nvidia
+    # reservation here makes `docker compose up` fail outright on every
+    # host without the NVIDIA container toolkit, rather than degrading
+    # to CPU inference.
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ || exit 1"]
+      # No curl in the ollama image either. bash is present.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/11434"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -68,9 +75,9 @@ services:
   # Backend - FastAPI
   # ----------------------------------------------------------
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    # Published image, not built from source. Requires authentication:
+    #   gh auth token | docker login ghcr.io -u <your-github-user> --password-stdin
+    image: ghcr.io/sayantansaha27-tech/medcomplyai-backend:0.1.0
     container_name: medcomplyai-backend
     restart: unless-stopped
     ports:
@@ -88,7 +95,9 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/meta/health || exit 1"]
+      # python:3.10-slim ships no curl. Use the interpreter that is
+      # guaranteed to be there rather than adding a package for one probe.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/meta/health', timeout=5).status==200 else 1)"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -98,9 +107,8 @@ services:
   # Frontend - Next.js
   # ----------------------------------------------------------
   frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
+    # Published image, not built from source. Requires authentication.
+    image: ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.0
     container_name: medcomplyai-frontend
     restart: unless-stopped
     ports:
