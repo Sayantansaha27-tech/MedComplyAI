@@ -1,0 +1,52 @@
+# ============================================================
+# MedComplyAI - Optional LLM Observability (Langfuse)
+#
+# Kept in a separate file rather than behind a compose profile.
+# Docker Compose interpolates the whole file before it filters by
+# profile, so a required-variable check on a profiled service makes
+# the core stack unusable too, even when that profile is inactive.
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.observability.yml \
+#     up -d
+#
+# Requires LANGFUSE_NEXTAUTH_SECRET, LANGFUSE_SALT, and
+# LANGFUSE_DB_PASSWORD to be set. Generate each with:
+#   openssl rand -base64 32
+# ============================================================
+
+services:
+
+  langfuse-server:
+    image: langfuse/langfuse:latest
+    container_name: medcomplyai-langfuse
+    restart: unless-stopped
+    ports:
+      - "3030:3000"
+    environment:
+      # No fallback values. Compose refuses to start when any of these
+      # is unset or empty, rather than silently booting with a known,
+      # publicly documented secret.
+      DATABASE_URL: "postgresql://langfuse:${LANGFUSE_DB_PASSWORD:?LANGFUSE_DB_PASSWORD must be set, generate with openssl rand -base64 32}@langfuse-db:5432/langfuse"
+      NEXTAUTH_URL: http://localhost:3030
+      NEXTAUTH_SECRET: "${LANGFUSE_NEXTAUTH_SECRET:?LANGFUSE_NEXTAUTH_SECRET must be set, generate with openssl rand -base64 32}"
+      SALT: "${LANGFUSE_SALT:?LANGFUSE_SALT must be set, generate with openssl rand -base64 32}"
+    depends_on:
+      - langfuse-db
+
+  langfuse-db:
+    image: postgres:15-alpine
+    container_name: medcomplyai-langfuse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: "${LANGFUSE_DB_PASSWORD:?LANGFUSE_DB_PASSWORD must be set, generate with openssl rand -base64 32}"
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+
+volumes:
+  langfuse_db_data:
+    driver: local

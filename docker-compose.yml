@@ -111,36 +111,6 @@ services:
       backend:
         condition: service_healthy
 
-  # ----------------------------------------------------------
-  # Langfuse - LLM Observability (optional, profile: observability)
-  # ----------------------------------------------------------
-  langfuse-server:
-    image: langfuse/langfuse:latest
-    container_name: medcomplyai-langfuse
-    restart: unless-stopped
-    profiles: ["observability"]
-    ports:
-      - "3030:3000"
-    environment:
-      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      NEXTAUTH_URL: http://localhost:3030
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-changeme-in-production}
-      SALT: ${LANGFUSE_SALT:-changeme-in-production}
-    depends_on:
-      - langfuse-db
-
-  langfuse-db:
-    image: postgres:15-alpine
-    container_name: medcomplyai-langfuse-db
-    restart: unless-stopped
-    profiles: ["observability"]
-    environment:
-      POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
-      POSTGRES_DB: langfuse
-    volumes:
-      - langfuse_db_data:/var/lib/postgresql/data
-
 # ----------------------------------------------------------
 # Volumes
 # ----------------------------------------------------------
@@ -150,6 +120,4 @@ volumes:
   ollama_data:
     driver: local
   backend_storage:
-    driver: local
-  langfuse_db_data:
     driver: local
