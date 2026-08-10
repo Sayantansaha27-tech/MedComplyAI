@@ -1,8 +1,8 @@
 # Evaluation
 
-**Read this section first.** Most of the numbers a reader wants are not here,
-because they have not been measured. This document states what has been observed,
-under what method, and what remains unmeasured. Nothing below is extrapolated.
+This document separates what has been measured from what has not. The unmeasured
+list is the longer of the two, and it is set out explicitly rather than left as an
+implication. Nothing below is extrapolated.
 
 The vocabulary is used strictly:
 
@@ -111,19 +111,22 @@ at 1 per tenant by default, so multi-run behaviour is untested.
 
 ---
 
-## Why this document is mostly absences
+## Why the gaps exist, and what closes them
 
-The honest reason is that the system was built to a deployment deadline for a
-small number of customers who evaluated it on whether their review got faster. It
-did, substantially, and that was sufficient commercial validation to keep going.
+The system was built to a deployment deadline for a small number of customers who
+evaluated it on whether their review got faster. It did, substantially, and that
+was sufficient commercial validation to continue. Evaluation infrastructure was
+never the constraint on the next piece of work, so it was never built.
 
-Evaluation infrastructure was never the blocker for the next thing, so it was
-never built.
+This is a genuine gap. A product arguing that its determinism makes it auditable
+should be able to state its accuracy. At present it can state its reproducibility
+and its cycle time, and those are different claims.
 
-That is a real gap and is listed in [`09-postmortem.md`](09-postmortem.md). A
-compliance product arguing that its determinism makes it auditable should be able
-to state its accuracy. Right now it can state its reproducibility and its cycle
-time, and those are not the same claim.
+**Priority order for closing it:**
 
-**The first thing to build** is the labelled coverage set. Everything else is
-computable from data that already exists in the interaction logs.
+1. **Labelled coverage set.** 50 to 100 requirement-document pairs scored by a
+   qualified reviewer. Unblocks precision and recall, and the evaluators are
+   deterministic so the run is cheap and repeatable once labels exist.
+2. **Grounding statistics.** Computable today from `grounding_passed` in the
+   existing interaction logs. No new instrumentation required.
+3. **Retrieval recall@k**, using the same labelled set from step 1.

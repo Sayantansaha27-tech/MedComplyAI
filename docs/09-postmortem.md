@@ -7,9 +7,9 @@ in paid use, which is the only point at which most of this becomes visible.
 
 ## 1. I published a deployment topology I had never run
 
-The single worst thing in this project. `docker-compose.yml` and both Dockerfiles
-sat in the public repository, referenced by a Quick Start section, for months.
-Nobody had ever executed them, including me. My actual workflow was
+The most consequential gap in the project. `docker-compose.yml` and both
+Dockerfiles sat in the public repository, referenced by a Quick Start section,
+for months. Nobody had ever executed them, including me. The actual workflow was
 `start_backend.sh` and `start_frontend.sh` running uvicorn and npm directly.
 
 When they were finally run, seven defects surfaced. Four of them independently
@@ -50,11 +50,13 @@ cleanup later, because history is permanent. The data is still in the initial
 commit. Untracking fixed the future; the past needs a history purge that has not
 been done because it is not needed while the repo stays local.
 
-**The uncomfortable part** is that I built a compliance product, whose entire
-value proposition is that customer documents stay under the customer's control,
-and I had customer-adjacent document text sitting unignored in version control on
-a laptop. The gap between the standard I designed the software to and the
-standard I operated at was large.
+**The wider point, stated accurately.** The ingested corpus in that repository is
+synthetic test material, so no customer document was ever at risk. That is the
+only reason this is a process failure rather than an incident, and it was luck
+rather than design: the practice was identical to the one that would have
+committed real dossiers. On a product whose value proposition is that customer
+documents stay under the customer's control, the standard the software was
+designed to and the standard the repository was operated at were not the same.
 
 ---
 

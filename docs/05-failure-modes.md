@@ -163,7 +163,10 @@ bytecode, logs, the SQLite database, and a 236 MB Qdrant vector store.
 Actual source is 443 files.
 
 The vector store is the serious part. Its payloads contain the full plaintext of
-every ingested document, so the corpus was sitting in version control.
+every ingested chunk, so the corpus was sitting in version control. That corpus
+is synthetic test material, verified by inspection, so nothing customer-owned was
+committed. The mechanism, however, does not distinguish between test documents and
+real ones.
 
 **Contained by luck, not design.** That repository has no git remote and has
 never been pushed. Nothing was exposed. Had it ever been pushed to the public
