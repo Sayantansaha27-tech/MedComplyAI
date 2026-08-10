@@ -1,6 +1,14 @@
-# MedComplyAI
+# MedComplyAI — Architecture and Deployment Documentation
 
-> **AI-native regulatory compliance platform for medical devices and pharmaceuticals — built entirely on local, open-weight models.**
+> **AI-native regulatory compliance platform for medical devices and pharmaceuticals, built entirely on local, open-weight models.**
+
+**Status:** Source closed. Deployed on-premise with paying users. This repository
+is published as architecture and deployment reference. It contains no application
+source.
+
+The deployment topology in [`reference/`](reference/) is real and runnable. Qdrant
+and Ollama start for anyone. The backend and frontend pull private images and need
+registry access. See [Deployment](#deployment).
 
 MedComplyAI turns a pile of regulatory documents (MDR, 510(k), ISO 14971, ISO 13485, CTD modules, drug labeling, IFUs) into a living, auditable compliance intelligence system. No cloud LLM APIs. No data leaves your environment. Every AI output is grounded, cited, and revision-tracked.
 
@@ -51,9 +59,9 @@ Regulators don't care what an LLM thinks. They care about *evidence artifacts*: 
 So the system is designed from the evidence up:
 
 - **Chunking is structural**, not arbitrary. Documents are split at section boundaries with hierarchy preserved (section path, section number, semantic label). Every chunk knows what it is.
-- **Requirements are hard-coded rules first, LLM fallback second.** For ISO 14971 and MDR Annex I, the coverage decision is made by deterministic keyword classifiers that mirror how a human auditor reads the document. LLMs are only called to explain or narrate — never to decide pass/fail.
+- **Coverage decisions are deterministic.** For ISO 14971 and MDR Annex I, the coverage decision is made by deterministic keyword classifiers that mirror how a human auditor reads the document. Those two evaluators contain no LLM calls at all, and no LLM writes a status, verdict, or coverage field anywhere in the system. LLMs are called only to explain or narrate. The scope matters: other frameworks route through a schema-agnostic path where the model does propose a finding severity, which is why this claim names ISO 14971 and MDR Annex I specifically rather than the whole product.
 - **Every AI output is grounded-validated before it reaches the user.** The LLM Gateway enforces a grounding contract: the model must cite evidence IDs that actually exist in the retrieved context. Ungrounded outputs are blocked, not just flagged.
-- **All state is immutable snapshots.** A compliance run produces a versioned, hash-verified snapshot. The snapshot can be replayed, compared across time, and exported for audit. Nothing can retroactively change what the system decided and why.
+- **All state is append-only snapshots.** A compliance run produces a versioned, hash-stamped snapshot: the payload is canonically serialised and SHA-256 hashed, and that hash binds every downstream LLM interaction to the exact engine state it was generated from. Snapshots can be compared across runs and exported as an audit bundle. There is a single write path and no update or delete, so nothing rewrites what the system decided and why. Two honest limits: the stored hash is a provenance stamp, not a tamper check, because nothing recomputes and compares it yet; and snapshot replay is not implemented.
 
 ### Why local models?
 
@@ -171,7 +179,9 @@ Upload (PDF/DOCX)
        │
        ▼
 ┌────────────────────┐
-│  Hierarchical       │   Chunks within section boundaries (1800 chars / 300 overlap)
+│  Hierarchical       │   Chunks within section boundaries. Parent ~3000 chars
+│                    │   (max 4500), child max 1200, parent_text carried on
+│                    │   each child for retrieval context
 │  Chunker           │   Preserves lists, tables as single chunks
 │                    │   Assigns: chunk_type (BODY/TABLE/HEADER_ONLY), chunk_index
 └──────┬─────────────┘
