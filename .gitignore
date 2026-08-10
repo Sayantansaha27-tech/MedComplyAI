@@ -15,23 +15,26 @@ __pycache__/
 .Python
 *.egg
 *.egg-info/
-dist/
-build/
-eggs/
-parts/
-var/
-sdist/
-develop-eggs/
+# Anchored to the repo root. Unanchored, these match a directory of the
+# same name at any depth and would silently exclude frontend/lib,
+# frontend/build, and similar application paths.
+/dist/
+/build/
+/eggs/
+/parts/
+/var/
+/sdist/
+/develop-eggs/
 .installed.cfg
-lib/
-lib64/
+/lib/
+/lib64/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
+/env/
 venv/
-ENV/
+/ENV/
 .venv/
 .env/
 pip-wheel-metadata/
