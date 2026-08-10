@@ -1,3 +1,18 @@
+# ============================================================
+# Reference only. Not runnable from this repository.
+#
+# In the private source repo this file lives at backend/Dockerfile
+# and is built with the repo root as context:
+#
+#   build:
+#     context: .
+#     dockerfile: backend/Dockerfile
+#
+# The COPY paths below are relative to that root and are correct for
+# it. They are deliberately left unchanged: rewriting them to resolve
+# against this documentation repo would break the real build.
+# ============================================================
+
 FROM python:3.10-slim
 
 WORKDIR /app

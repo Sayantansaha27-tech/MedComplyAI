@@ -1,6 +1,14 @@
-# MedComplyAI
+# MedComplyAI — Architecture and Deployment Documentation
 
-> **AI-native regulatory compliance platform for medical devices and pharmaceuticals — built entirely on local, open-weight models.**
+> **AI-native regulatory compliance platform for medical devices and pharmaceuticals, built entirely on local, open-weight models.**
+
+**Status:** Source closed. Deployed on-premise with paying users. This repository
+is published as architecture and deployment reference. It contains no application
+source.
+
+The deployment topology in [`reference/`](reference/) is real and runnable. Qdrant
+and Ollama start for anyone. The backend and frontend pull private images and need
+registry access. See [Deployment](#deployment).
 
 MedComplyAI turns a pile of regulatory documents (MDR, 510(k), ISO 14971, ISO 13485, CTD modules, drug labeling, IFUs) into a living, auditable compliance intelligence system. No cloud LLM APIs. No data leaves your environment. Every AI output is grounded, cited, and revision-tracked.
 
@@ -20,15 +28,16 @@ MedComplyAI turns a pile of regulatory documents (MDR, 510(k), ISO 14971, ISO 13
   - [Portfolio & Program Layer](#portfolio--program-layer)
 - [Tech Stack](#tech-stack)
 - [Directory Structure](#directory-structure)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [With Docker Compose](#with-docker-compose)
-  - [Manual Setup](#manual-setup)
+- [Deployment](#deployment)
+  - [Host requirements](#host-requirements)
+  - [Ports](#ports)
+  - [Start the stack](#start-the-stack)
+  - [Pull the models](#pull-the-models)
+  - [Overlays](#overlays)
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
 - [Data Privacy & Security](#data-privacy--security)
 - [Roadmap](#roadmap)
-- [Contributing](#contributing)
 
 ---
 
@@ -51,9 +60,9 @@ Regulators don't care what an LLM thinks. They care about *evidence artifacts*: 
 So the system is designed from the evidence up:
 
 - **Chunking is structural**, not arbitrary. Documents are split at section boundaries with hierarchy preserved (section path, section number, semantic label). Every chunk knows what it is.
-- **Requirements are hard-coded rules first, LLM fallback second.** For ISO 14971 and MDR Annex I, the coverage decision is made by deterministic keyword classifiers that mirror how a human auditor reads the document. LLMs are only called to explain or narrate — never to decide pass/fail.
+- **Coverage decisions are deterministic.** For ISO 14971 and MDR Annex I, the coverage decision is made by deterministic keyword classifiers that mirror how a human auditor reads the document. Those two evaluators contain no LLM calls at all, and no LLM writes a status, verdict, or coverage field anywhere in the system. LLMs are called only to explain or narrate. The scope matters: other frameworks route through a schema-agnostic path where the model does propose a finding severity, which is why this claim names ISO 14971 and MDR Annex I specifically rather than the whole product.
 - **Every AI output is grounded-validated before it reaches the user.** The LLM Gateway enforces a grounding contract: the model must cite evidence IDs that actually exist in the retrieved context. Ungrounded outputs are blocked, not just flagged.
-- **All state is immutable snapshots.** A compliance run produces a versioned, hash-verified snapshot. The snapshot can be replayed, compared across time, and exported for audit. Nothing can retroactively change what the system decided and why.
+- **All state is append-only snapshots.** A compliance run produces a versioned, hash-stamped snapshot: the payload is canonically serialised and SHA-256 hashed, and that hash binds every downstream LLM interaction to the exact engine state it was generated from. Snapshots can be compared across runs and exported as an audit bundle. There is a single write path and no update or delete, so nothing rewrites what the system decided and why. Two honest limits: the stored hash is a provenance stamp, not a tamper check, because nothing recomputes and compares it yet; and snapshot replay is not implemented.
 
 ### Why local models?
 
@@ -171,7 +180,9 @@ Upload (PDF/DOCX)
        │
        ▼
 ┌────────────────────┐
-│  Hierarchical       │   Chunks within section boundaries (1800 chars / 300 overlap)
+│  Hierarchical       │   Chunks within section boundaries. Parent ~3000 chars
+│                    │   (max 4500), child max 1200, parent_text carried on
+│                    │   each child for retrieval context
 │  Chunker           │   Preserves lists, tables as single chunks
 │                    │   Assigns: chunk_type (BODY/TABLE/HEADER_ONLY), chunk_index
 └──────┬─────────────┘
@@ -505,39 +516,74 @@ MedComplyAI/
 
 ---
 
-## Quick Start
+## Deployment
 
-### Prerequisites
+MedComplyAI is closed source. This repository carries the deployment topology,
+not the application. The stack runs from [`reference/`](reference/): Qdrant and
+Ollama are public upstream images and start for anyone, while the backend and
+frontend pull **private** images and need registry access.
 
-- Docker Desktop 24+ (or Docker Engine + Compose V2)
-- NVIDIA GPU with CUDA drivers *(recommended — CPU inference is functional but slow)*
-- 16 GB RAM minimum, 32 GB recommended
-- 20 GB free disk space (models + vector data)
+### Host requirements
 
-### With Docker Compose
+| | |
+|---|---|
+| Docker | Desktop 24+, or Engine with Compose V2 |
+| RAM | 16 GB minimum, 32 GB recommended |
+| Disk | 20 GB free for models and vector data |
+| GPU | NVIDIA with CUDA drivers, strongly recommended |
 
-**1. Clone and configure**
+GPU is optional and opt-in. The base compose file runs Ollama on CPU, which is
+functional but materially slower for 7B inference. Enable a GPU with the
+overlay described below. It is deliberately not in the base file: an `nvidia`
+device reservation makes `docker compose up` fail outright on any host without
+the NVIDIA container toolkit, rather than degrading to CPU.
+
+### Ports
+
+| Service | Port |
+|---|---|
+| Frontend | 3000 |
+| Backend API | 8000 |
+| Qdrant | 6333, 6334 (gRPC) |
+| Ollama | 11434 |
+| Langfuse (optional) | 3030 |
+
+### Start the stack
 
 ```bash
-git clone https://github.com/your-org/MedComplyAI.git
-cd MedComplyAI
-cp .env.example .env
-# Edit .env if you want to change any defaults
-```
+git clone https://github.com/Sayantansaha27-tech/MedComplyAI.git
+cd MedComplyAI/reference
 
-**2. Start the stack**
+# Backend and frontend are private images
+gh auth token | docker login ghcr.io -u <your-github-user> --password-stdin
 
-```bash
+cp ../.env.example .env
 docker compose up -d
 ```
 
-This starts:
-- Qdrant at `http://localhost:6333`
-- Ollama at `http://localhost:11434`
-- Backend API at `http://localhost:8000`
-- Frontend at `http://localhost:3000`
+All four services report healthy in roughly 20 seconds:
 
-**3. Pull LLM models**
+```
+SERVICE    STATUS
+backend    Up (healthy)
+frontend   Up
+ollama     Up (healthy)
+qdrant     Up (healthy)
+```
+
+```bash
+curl http://localhost:8000/api/v1/meta/health
+# {"status":"ok","components":{"backend":"ok","vectorStore":"ok","ollama":"ok"}}
+```
+
+Without the `docker login`, Qdrant and Ollama start and the two application
+images fail to pull. That is the expected result for a closed-source product,
+not a broken compose file.
+
+### Pull the models
+
+Models are not baked into the images. Ollama starts empty, so pull all three
+before running an analysis.
 
 ```bash
 # Main inference model (~4.7 GB)
@@ -550,60 +596,30 @@ docker exec medcomplyai-ollama ollama pull rjmalagon/gte-qwen2-1.5b-instruct-emb
 docker exec medcomplyai-ollama ollama pull qwen3-vl:2b-thinking
 ```
 
-**4. Open the app**
+Then open `http://localhost:3000`.
 
-Navigate to `http://localhost:3000`
-
-**Optional: Enable observability (Langfuse)**
+### Overlays
 
 ```bash
-docker compose --profile observability up -d
+# NVIDIA GPU acceleration for Ollama
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+# Langfuse LLM observability, dashboard on :3030
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 ```
 
-Langfuse dashboard: `http://localhost:3030`
+The observability overlay requires `LANGFUSE_NEXTAUTH_SECRET`, `LANGFUSE_SALT`,
+and `LANGFUSE_DB_PASSWORD`. It refuses to start if any is unset or empty rather
+than falling back to a default. Generate each with `openssl rand -base64 32`.
 
----
+### Operational notes
 
-### Manual Setup
-
-**Backend**
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download NLTK data
-python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
-
-# Copy and configure environment
-cp ../.env.example .env
-# Edit .env: set QDRANT_URL and OLLAMA_URL
-
-# Start Qdrant (Docker)
-docker run -d -p 6333:6333 -v qdrant_data:/qdrant/storage qdrant/qdrant:v1.9.2
-
-# Start Ollama
-ollama serve &
-ollama pull qwen2.5:7b-instruct
-ollama pull rjmalagon/gte-qwen2-1.5b-instruct-embed-f16
-
-# Start backend
-uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
-```
-
-**Frontend**
-
-```bash
-cd frontend
-npm install
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
-```
+- State lives in named volumes, so `docker compose down` without `-v` preserves
+  the vector store and database. `down -v` destroys both.
+- The images contain no data. No vector store, no database, no ingested
+  documents. All state is created at first run.
+- Healthchecks deliberately avoid `curl`, which none of the base images ship.
+  See [`reference/README.md`](reference/README.md).
 
 ---
 
@@ -708,9 +724,21 @@ GET    /api/v1/meta/version                Engine version info
 
 ---
 
-## Contributing
+## Documentation
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, code style, and how to add a new compliance framework evaluator.
+| | |
+|---|---|
+| [`docs/00-problem.md`](docs/00-problem.md) | The problem in the customer's words |
+| [`docs/01-scope-and-non-goals.md`](docs/01-scope-and-non-goals.md) | What this deliberately does not do |
+| [`docs/02-architecture.md`](docs/02-architecture.md) | Ingestion, retrieval, gap engine, gateway |
+| [`docs/03-decisions.md`](docs/03-decisions.md) | ADRs, including options that were rejected |
+| [`docs/04-integration-contracts.md`](docs/04-integration-contracts.md) | Schemas, API surface, error codes |
+| [`docs/05-failure-modes.md`](docs/05-failure-modes.md) | What has actually broken, and how it was found |
+| [`docs/06-evals.md`](docs/06-evals.md) | Measured numbers, with the method stated |
+| [`docs/07-runbook.md`](docs/07-runbook.md) | Install, upgrade, rollback, backup, triage |
+| [`docs/08-handoff.md`](docs/08-handoff.md) | Running it without the person who built it |
+| [`docs/09-postmortem.md`](docs/09-postmortem.md) | What would be done differently |
+| [`reference/README.md`](reference/README.md) | Deployment topology and image details |
 
 ---
 

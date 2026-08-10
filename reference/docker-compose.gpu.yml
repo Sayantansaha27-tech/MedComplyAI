@@ -1,0 +1,35 @@
+# ============================================================
+# MedComplyAI - Optional NVIDIA GPU acceleration for Ollama
+#
+# Opt-in overlay. The base compose file runs Ollama on CPU, which works
+# on any host. Declaring an nvidia device reservation in the base file
+# instead makes `docker compose up` fail outright with
+#
+#   could not select device driver "nvidia" with capabilities: [[gpu]]
+#
+# on every machine without the NVIDIA container toolkit, including all
+# Apple Silicon hosts. A missing GPU should degrade to slower inference,
+# not stop the stack from starting.
+#
+# Requires: NVIDIA driver + nvidia-container-toolkit on the host.
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.gpu.yml \
+#     up -d
+#
+# Verify the GPU is visible inside the container:
+#   docker compose exec ollama nvidia-smi
+# ============================================================
+
+services:
+
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
