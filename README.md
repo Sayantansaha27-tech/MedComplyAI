@@ -743,3 +743,14 @@ GET    /api/v1/meta/version                Engine version info
 ---
 
 *MedComplyAI is not a substitute for qualified regulatory affairs professionals. It is a tool to augment and accelerate compliance review, not to replace human judgment. All AI outputs should be reviewed by a qualified person before use in regulatory submissions.*
+
+---
+
+## License
+
+Documentation in this repository is licensed under [CC BY-NC-ND 4.0](LICENSE)
+(Attribution-NonCommercial-NoDerivatives). See [NOTICE](NOTICE) for the scope of
+that grant.
+
+The MedComplyAI software itself is closed source. Nothing in this repository
+licenses or distributes it.
