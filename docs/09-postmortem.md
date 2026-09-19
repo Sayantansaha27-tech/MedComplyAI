@@ -89,9 +89,11 @@ There is a governance layer with submission policy packs, weight policies,
 lifecycle states (`DRAFT`, `ACTIVE`, `RETIRED`), approval workflows, and
 `created_by` / `approved_by` / `activation_by` audit fields.
 
-The database rows for it are all test fixtures. Titles are `pt` and `pd`. Every
-actor is `tester`. The `documents`, `chunks`, `sections`, `ai_outputs`, and
-`llm_interactions` tables are empty.
+The only rows for it in the database were test fixtures: titles `pt` and `pd`,
+every actor `tester`. Nobody using the feature wrote them. The test suite did.
+It had no isolation and ran against the live database, so every run left
+governance fixtures behind. That is a separate defect, since fixed, and it made
+the table look used when it was not.
 
 This is machinery for a multi-user, multi-org deployment built before a
 multi-user, multi-org customer existed.
@@ -101,8 +103,9 @@ approver appears, not in anticipation of them. The work is not wasted exactly,
 the schema is sound, but it was capital spent on a hypothesis instead of on the
 things that were actually broken, like a deployment path that did not work.
 
-**The tell I missed:** when the only rows in a table are ones you wrote to test
-the table, that feature has no user yet.
+**The tell I missed:** when the only rows in a table are ones your tests wrote,
+that feature has no user yet. A test suite that writes to the real database hides
+exactly that signal.
 
 ---
 

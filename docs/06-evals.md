@@ -83,8 +83,10 @@ and confirming the fallback carries no model text. What is unmeasured:
 - How often the repair prompt rescues a failed attempt within three tries
 - False positives, where a correctly grounded answer is rejected
 
-The interaction log records `grounding_passed` per attempt, so this is
-computable from existing data. It has not been computed.
+These are not yet computable from existing data. Interactions are persisted on
+only two paths, evidence explanations and delta explanations. The Copilot path
+keeps its interaction log in memory and never writes it, so the record that
+carries `grounding_passed` does not exist for most traffic.
 
 ### Retrieval quality
 
@@ -127,6 +129,7 @@ and its cycle time, and those are different claims.
 1. **Labelled coverage set.** 50 to 100 requirement-document pairs scored by a
    qualified reviewer. Unblocks precision and recall, and the evaluators are
    deterministic so the run is cheap and repeatable once labels exist.
-2. **Grounding statistics.** Computable today from `grounding_passed` in the
-   existing interaction logs. No new instrumentation required.
+2. **Grounding statistics.** Needs one change first: persist every gateway
+   interaction, not only the explanation paths. The `grounding_passed` field
+   already exists on the record; the Copilot path simply never writes it.
 3. **Retrieval recall@k**, using the same labelled set from step 1.

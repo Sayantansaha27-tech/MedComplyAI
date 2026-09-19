@@ -209,6 +209,54 @@ than removed quietly.
 
 ---
 
+## 5. Shipped defaults did not match production
+
+**Severity: high. Status: fixed.**
+
+Production deployments run with the ISO 14971 and MDR GSPR audits enabled. Both
+flags defaulted to off in the application and were explicitly `false` in
+`.env.example`. The orchestrator drops every requirement belonging to a disabled
+framework before evaluation, so the reference stack in this repository ran 6
+deterministic requirements: three MDR Annex I §23.1 labelling checks and three
+MDR documentation checks. None of the ISO 14971 engine this documentation
+describes ran at all.
+
+Nothing failed, which is why it survived. Runs completed and produced findings.
+They were produced by a smaller engine, and a missing framework does not look
+like an error. It looks like a shorter report.
+
+Found by tracing which flag gates each evaluator, rather than reading the
+feature list.
+
+**Fix.** Defaults set to on, in the application and in `.env.example`. Verified
+with no overrides: 32 deterministic requirements per run (12 ISO 14971, 14 MDR
+GSPR, 6 MDR), up from 6. ISO 13485 and 21 CFR 820 stay off. Production does not
+run them, and they have not been measured.
+
+---
+
+## 6. The test suite wrote to the live database
+
+**Severity: medium. Status: fixed.**
+
+Nine tests opened the application's own database session, and nothing redirected
+it, so every test run wrote into the real SQLite file. Governance fixtures, a
+failed gap run against a fixture document named `std`, and a human-verification
+decision on a hardcoded run ID were all test output sitting among real data.
+They could only be told apart by matching timestamps to the test source.
+
+Two test modules also imported the application under a different package path
+from the other 38, so they could not be collected at all. One of them was the
+grounding validator suite.
+
+**Fix.** Test configuration redirects every storage path and the vector
+collection to a temporary location before the application is imported, and
+asserts that it did. The suite runs inside the backend image with the source
+mounted read-only, so a regression in the isolation fails instead of writing.
+Verified: the database file's SHA-256 is identical before and after a full run.
+
+---
+
 ## Open items
 
 | Item | Severity | Note |
