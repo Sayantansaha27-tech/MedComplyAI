@@ -637,8 +637,8 @@ Key settings:
 | `EMBEDDING_MODEL_ID` | `rjmalagon/gte-qwen2-1.5b-instruct-embed-f16` | Embedding model tag |
 | `GLASSBOX_ENABLED` | `true` | Enable grounding validation |
 | `GROUNDING_BLOCK_ON_FAILURE` | `true` | Reject ungrounded outputs |
-| `ENABLE_ISO14971_AUDIT` | `false` | Enable ISO 14971 advanced audit |
-| `ENABLE_MDR_GSPR_AUDIT` | `false` | Enable MDR Annex I audit |
+| `ENABLE_ISO14971_AUDIT` | `true` | Enable ISO 14971 advanced audit |
+| `ENABLE_MDR_GSPR_AUDIT` | `true` | Enable MDR Annex I audit |
 | `ENABLE_LANGFUSE` | `false` | Enable Langfuse observability |
 | `GAP_MAX_CONCURRENT_RUNS_PER_TENANT` | `1` | Run concurrency limit |
 
