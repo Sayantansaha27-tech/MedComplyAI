@@ -62,7 +62,7 @@ So the system is designed from the evidence up:
 - **Chunking is structural**, not arbitrary. Documents are split at section boundaries with hierarchy preserved (section path, section number, semantic label). Every chunk knows what it is.
 - **Coverage decisions are deterministic.** For ISO 14971 and MDR Annex I, the coverage decision is made by deterministic keyword classifiers that mirror how a human auditor reads the document. Those two evaluators contain no LLM calls at all, and no LLM writes a status, verdict, or coverage field anywhere in the system. LLMs are called only to explain or narrate. The scope matters: other frameworks route through a schema-agnostic path where the model does propose a finding severity, which is why this claim names ISO 14971 and MDR Annex I specifically rather than the whole product.
 - **Every AI output is grounded-validated before it reaches the user.** The LLM Gateway enforces a grounding contract: the model must cite evidence IDs that actually exist in the retrieved context. Ungrounded outputs are blocked, not just flagged.
-- **All state is append-only snapshots.** A compliance run produces a versioned, hash-stamped snapshot: the payload is canonically serialised and SHA-256 hashed, and that hash binds every downstream LLM interaction to the exact engine state it was generated from. Snapshots can be compared across runs and exported as an audit bundle. There is a single write path and no update or delete, so nothing rewrites what the system decided and why. Two honest limits: the stored hash is a provenance stamp, not a tamper check, because nothing recomputes and compares it yet; and snapshot replay is not implemented.
+- **All state is append-only snapshots.** A compliance run produces a versioned, hash-verified snapshot: the payload is canonically serialised and SHA-256 hashed, and that hash binds every downstream LLM interaction to the exact engine state it was generated from. Snapshots can be compared across runs and exported as an audit bundle. There is a single write path and no update or delete, so nothing rewrites what the system decided and why. Loading an audit bundle recomputes every coverage item's hash and reports any mismatch in the bundle's integrity block, so a stored status edited after the fact is detected. Two honest limits: the hash is unkeyed, so an edit that also recomputes it is not caught, which needs the bundle signed; and snapshot replay is not implemented.
 
 ### Why local models?
 
@@ -530,13 +530,30 @@ frontend pull **private** images and need registry access.
 | Docker | Desktop 24+, or Engine with Compose V2 |
 | RAM | 16 GB minimum, 32 GB recommended |
 | Disk | 20 GB free for models and vector data |
-| GPU | NVIDIA with CUDA drivers, strongly recommended |
+| GPU | NVIDIA with CUDA drivers. Required in practice, see below |
 
-GPU is optional and opt-in. The base compose file runs Ollama on CPU, which is
-functional but materially slower for 7B inference. Enable a GPU with the
-overlay described below. It is deliberately not in the base file: an `nvidia`
-device reservation makes `docker compose up` fail outright on any host without
-the NVIDIA container toolkit, rather than degrading to CPU.
+GPU acceleration is opt-in via an overlay, because an `nvidia` device
+reservation in the base file makes `docker compose up` fail outright on any
+host without the NVIDIA container toolkit instead of degrading to CPU.
+
+**CPU-only inference is not practically usable for gap analysis.** Measured on
+an M3 with the containerised Ollama: a RAG chat answer takes about 35 seconds,
+which is fine, but every gap-analysis LLM call exceeds its 120 second budget
+and the engines return no findings. Document ingestion, retrieval, chat and the
+deterministic coverage engine all work on CPU; the LLM-backed gap engines need
+a GPU.
+
+**On macOS, the containerised Ollama has no GPU access at all.** Metal is not
+available inside Linux containers, so the `ollama` service runs on CPU even on
+Apple Silicon. For a Mac host, run Ollama natively so it uses Metal, and point
+the backend at it:
+
+```bash
+OLLAMA_URL=http://host.docker.internal:11434
+```
+
+then pull the models on the host with `ollama pull` rather than
+`docker exec`.
 
 ### Ports
 
@@ -589,12 +606,17 @@ before running an analysis.
 # Main inference model (~4.7 GB)
 docker exec medcomplyai-ollama ollama pull qwen2.5:7b-instruct
 
-# Embedding model (~1.5 GB)
-docker exec medcomplyai-ollama ollama pull rjmalagon/gte-qwen2-1.5b-instruct-embed-f16
+# Embedding model (~669 MB, 1024 dimensions)
+docker exec medcomplyai-ollama ollama pull mxbai-embed-large:latest
 
-# Vision model for scanned PDFs (optional, ~1.5 GB)
+# Vision model for scanned PDFs (optional, ~1.9 GB)
 docker exec medcomplyai-ollama ollama pull qwen3-vl:2b-thinking
 ```
+
+The embedding model must match `EMBEDDING_MODEL_ID`. The vector dimension is
+derived from it, and a collection built with a different model is refused at
+startup with the reset command to run. Switching models later requires
+`POST /api/v1/admin/reset-vector-store` and re-ingestion.
 
 Then open `http://localhost:3000`.
 

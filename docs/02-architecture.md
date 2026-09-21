@@ -162,9 +162,13 @@ delete. The hash uses `json.dumps(payload, sort_keys=True)` with SHA-256, and
 bundle hashes use the blank-the-field-then-hash pattern so the hash covers the
 payload it is stored in.
 
-Two limits, stated because they are easy to overclaim: the hash is a **provenance
-stamp**, binding an interaction to an engine state, not a tamper check, because
-nothing recomputes and compares it. And append-only is enforced by there being
-one write path, not by a database constraint.
+Loading an audit bundle recomputes each coverage item's hash from its stored
+status and evidence and reports mismatches in the bundle's integrity block, so an
+edited status is detected rather than exported silently.
+
+Two limits, stated because they are easy to overclaim: the hash is **unkeyed**, so
+an edit that also recomputes it is not detected, which requires signing the bundle
+(`signature_placeholder` reserves the field). And append-only is enforced by there
+being one write path, not by a database constraint.
 
 Snapshot replay is not implemented. Compare and export are.

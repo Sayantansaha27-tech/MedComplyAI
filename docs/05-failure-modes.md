@@ -257,11 +257,101 @@ Verified: the database file's SHA-256 is identical before and after a full run.
 
 ---
 
+## 7. Embedding configuration was inconsistent three ways
+
+**Severity: high. Status: fixed.**
+
+`EMBEDDING_MODEL_ID` defaulted to mxbai-embed-large with `EMBEDDING_VECTOR_SIZE`
+1024, `main.py` hardcoded `ensure_collection(vector_size=1536)`, and
+`.env.example` selected a 1536-dimension model without touching the size. The
+reference stack worked only because the hardcoded value happened to match its
+`.env`. A deployment on the defaults would have created a 1536 collection for a
+1024 model, and every write would have failed.
+
+`ensure_collection` returned success for any existing collection without
+comparing its vector size, which is what kept this invisible.
+
+The same class of error applied to the model tag: `LLM_MODEL_ID` defaulted to
+`qwen2.5:7b-instruct-fixed`, a local Modelfile that no longer exists, so a fresh
+install could not pull the model its own configuration named.
+
+**Fix.** The dimension is derived from the model id, and an explicit override
+that contradicts a known model fails at startup. `ensure_collection` compares
+sizes and refuses a mismatch, naming the reset endpoint. Model tags are now
+pullable from the registry.
+
+Verified live: the startup guard refused a stale 1536 collection with an
+actionable error, `POST /api/v1/admin/reset-vector-store` migrated it to 1024,
+and the next start was clean.
+
+---
+
+## 8. Health reported ok on a stack that could not ingest
+
+**Severity: medium. Status: fixed.**
+
+Found immediately after the guard above started working. The guard logged that
+the collection was unusable and ingestion would fail, and `/meta/health`
+returned `status: "ok"` with `vectorStore: "ok"` at the same moment, because the
+check only proved the server was reachable.
+
+Monitoring would have stayed green on a deployment that could not accept a
+single document.
+
+**Fix.** Health compares the collection's vector size with the configured model
+and reports `vectorStore: "degraded"` with a detail message, which makes overall
+status `degraded` rather than `ok`. An absent or unreadable collection is still
+reported as ok, since that is not evidence of a mismatch.
+
+---
+
+## 9. A timed-out analysis reported success, with a readiness score
+
+**Severity: high. Status: fixed.**
+
+On a real CPU-only run, every gap-analysis LLM call exceeded its timeout. The
+endpoint returned HTTP 200, zero findings, `Unknown` alignment, and a **readiness
+score**. Nothing in the response distinguished that from a document with no gaps,
+and the score reported readiness the run never established, because it was
+computed from an empty finding list.
+
+This is exactly the conflation the coverage engine avoids with `not_met` versus
+`not_assessed`, reintroduced one layer above it.
+
+**Fix.** The summary carries `analysis_complete` and `incomplete_reasons`, and
+readiness is not scored when the pass was incomplete.
+
+---
+
+## 10. CPU-only inference cannot run the gap engines
+
+**Severity: medium. Status: documented, not a software defect.**
+
+Measured on an M3 with the containerised Ollama: ingestion, retrieval and RAG
+chat all work, with a chat answer in about 35 seconds. Every gap-analysis LLM
+call exceeded its 120 second budget, so all three engines returned zero findings.
+
+**On macOS the containerised Ollama has no GPU access at all.** Metal is not
+available inside Linux containers, so the service runs on CPU even on Apple
+Silicon. The documentation previously called a GPU "recommended"; for the
+LLM-backed engines it is required. A Mac host should run Ollama natively and
+point the backend at it.
+
+The deterministic coverage engine is unaffected, because it makes no LLM calls.
+
+---
+
 ## Open items
 
 | Item | Severity | Note |
 |---|---|---|
-| Snapshot hashes never re-verified | Medium | Provenance stamp, not tamper detection |
+| Audit bundles unsigned | Low | Hashes are verified on load, but unkeyed, so a forger who recomputes them is not caught |
+| Timeout settings sprawl | Medium | Seven separate timeouts; the documented `GAP_LLM_TIMEOUT` does not affect the advanced engines, which use `ADV_GAP_LLM_CALL_TIMEOUT_SEC` |
+| Gateway interactions not persisted | Medium | Only two explanation paths write the log; Copilot keeps it in memory. Its table also has a non-null foreign key to `gap_runs`, so use cases without a run cannot be logged without a schema change |
+| Document `chunkCount` always 0 | Low | Chunks live in the vector store; the count reads an unpopulated table |
+| Run progress stuck at 5% | Low | Stage is not updated past alignment, so a long run looks hung |
+| Qdrant client/server skew | Low | Client 1.19 against server 1.9.2, outside the supported range |
+| US guide data absent from the image | Low | The Dockerfile copies only the application, so US-guide enrichment finds no data |
 | Snapshot replay not implemented | Medium | Compare and export exist |
 | Vector store in source repo history | Medium | Contained: repo has no remote and is never pushed |
 | Snapshot immutability by convention | Low | Single write path, no constraint enforcing it |

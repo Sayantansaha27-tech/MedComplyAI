@@ -77,7 +77,7 @@ services:
   backend:
     # Published image, not built from source. Requires authentication:
     #   gh auth token | docker login ghcr.io -u <your-github-user> --password-stdin
-    image: ghcr.io/sayantansaha27-tech/medcomplyai-backend:0.1.0
+    image: ghcr.io/sayantansaha27-tech/medcomplyai-backend:0.1.1
     container_name: medcomplyai-backend
     restart: unless-stopped
     ports:
@@ -108,7 +108,7 @@ services:
   # ----------------------------------------------------------
   frontend:
     # Published image, not built from source. Requires authentication.
-    image: ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.0
+    image: ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.1
     container_name: medcomplyai-frontend
     restart: unless-stopped
     ports:

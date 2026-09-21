@@ -127,9 +127,10 @@ Stated so you can answer users without escalating:
 
 - **Snapshot replay does not exist.** Runs can be compared and exported, not
   re-executed to reproduce a historical result.
-- **Snapshot hashes are not verified.** They are a provenance stamp binding an
-  explanation to an engine state, not tamper detection. Do not present them to an
-  auditor as proof a record is unaltered.
+- **Snapshot hashes are verified, but not signed.** An audit bundle reports
+  `coverage_hashes_verified` in its integrity block, and a status edited after the
+  run is detected. An edit that also recomputes the hash is not, because the hash
+  is unkeyed.
 - **Classifier accuracy is not measured.** The system is reproducible; its
   precision and recall against expert ground truth are unquantified. See
   [`06-evals.md`](06-evals.md).

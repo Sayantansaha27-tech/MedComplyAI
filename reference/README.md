@@ -40,9 +40,16 @@ open http://localhost:3000
 Without the `docker login` step, qdrant and ollama start and the backend and
 frontend fail to pull. That is expected, not a broken compose file.
 
-Models are not baked into the images. Ollama starts empty, so pull the three
-models before running an analysis. See the deployment requirements in the root
-README.
+Models are not baked into the images. Ollama starts empty, so pull the models
+before running an analysis. See the deployment requirements in the root README.
+
+**On macOS the `ollama` service has no GPU access**, because Metal is not
+available inside Linux containers. It runs on CPU even on Apple Silicon, and
+CPU-only inference is not fast enough for the gap-analysis engines: every call
+exceeds its 120 second budget and the engines return no findings. Ingestion,
+retrieval, chat and the deterministic coverage engine are fine on CPU. For a
+Mac host, run Ollama natively and set
+`OLLAMA_URL=http://host.docker.internal:11434`.
 
 ## Overlays
 
@@ -86,8 +93,8 @@ The replacements use only what each image actually contains: `bash` and
 
 | Service | Image | Visibility |
 |---|---|---|
-| backend | `ghcr.io/sayantansaha27-tech/medcomplyai-backend:0.1.0` | private |
-| frontend | `ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.0` | private |
+| backend | `ghcr.io/sayantansaha27-tech/medcomplyai-backend:0.1.1` | private |
+| frontend | `ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.1` | private |
 | qdrant | `qdrant/qdrant:v1.9.2` | public upstream |
 | ollama | `ollama/ollama:latest` | public upstream |
 

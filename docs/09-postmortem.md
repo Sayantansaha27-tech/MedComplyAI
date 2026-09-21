@@ -140,7 +140,8 @@ by reading two files" is both true and far more compelling than hedged phrasing.
   absence, which is the only enforcement that survives a deadline.
 - **Canonical JSON hashing.** `sort_keys` with SHA-256, and the blank-the-field-
   then-hash pattern for bundle hashes, is textbook and was right the first time.
-  The gap is that nothing verifies the hashes, not the hashing itself.
+  Verification on bundle load was added later; the hashing itself never needed
+  changing.
 - **Refusing to output a filing decision.** Sustained pressure to add it. Holding
   that line kept the product on the correct side of a regulatory boundary.
 
