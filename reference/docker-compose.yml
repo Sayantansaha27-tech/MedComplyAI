@@ -108,7 +108,7 @@ services:
   # ----------------------------------------------------------
   frontend:
     # Published image, not built from source. Requires authentication.
-    image: ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.1
+    image: ghcr.io/sayantansaha27-tech/medcomplyai-frontend:0.1.2
     container_name: medcomplyai-frontend
     restart: unless-stopped
     ports:
