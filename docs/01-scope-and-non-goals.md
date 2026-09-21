@@ -80,11 +80,12 @@ currently be re-executed to reproduce a historical result from scratch. This is
 a known gap, stated here rather than implied away. See
 [`09-postmortem.md`](09-postmortem.md).
 
-### It does not verify its own integrity hashes
+### It does not resist a determined forger
 
-Snapshot hashes are computed and stored correctly. Nothing recomputes and
-compares them, so the hash is a provenance stamp binding an LLM interaction to an
-engine state, not a tamper-detection mechanism. Also a known gap.
+Loading an audit bundle recomputes each coverage item's hash and reports
+mismatches, so an edited status or evidence set is detected. The hash is unkeyed,
+though, so someone who edits a record *and* recomputes its hash is not caught.
+Detecting that requires signing the bundle, which is not implemented.
 
 ## Where the boundary gets pressure
 

@@ -158,9 +158,15 @@ state it described.
 Audit bundles add `integrity.bundle_hash`, computed with the hash field blanked
 first so the hash covers the payload it is embedded in.
 
-**What this does not give you.** The hash is a provenance stamp, not tamper
-detection. Nothing recomputes and compares it. Do not present it to an auditor as
-proof the record is unaltered.
+**What this gives you.** `GET /gap/advanced/{run_id}/audit-bundle` recomputes
+every coverage item's hash on load and reports `coverage_hashes_verified` plus
+`coverage_hash_mismatches` in the `integrity` block. Check that flag before
+treating a bundle as intact; it is `null` if the check did not run.
+
+**What it does not give you.** The hash is unkeyed, so an edit that also
+recomputes the hash passes. Do not present a verified bundle to an auditor as
+proof against a determined forger; that needs the signature the bundle reserves
+room for.
 
 ## Errors
 

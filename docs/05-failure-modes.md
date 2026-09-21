@@ -209,11 +209,188 @@ than removed quietly.
 
 ---
 
+## 5. Shipped defaults did not match production
+
+**Severity: high. Status: fixed.**
+
+Production deployments run with the ISO 14971 and MDR GSPR audits enabled. Both
+flags defaulted to off in the application and were explicitly `false` in
+`.env.example`. The orchestrator drops every requirement belonging to a disabled
+framework before evaluation, so the reference stack in this repository ran 6
+deterministic requirements: three MDR Annex I §23.1 labelling checks and three
+MDR documentation checks. None of the ISO 14971 engine this documentation
+describes ran at all.
+
+Nothing failed, which is why it survived. Runs completed and produced findings.
+They were produced by a smaller engine, and a missing framework does not look
+like an error. It looks like a shorter report.
+
+Found by tracing which flag gates each evaluator, rather than reading the
+feature list.
+
+**Fix.** Defaults set to on, in the application and in `.env.example`. Verified
+with no overrides: 32 deterministic requirements per run (12 ISO 14971, 14 MDR
+GSPR, 6 MDR), up from 6. ISO 13485 and 21 CFR 820 stay off. Production does not
+run them, and they have not been measured.
+
+---
+
+## 6. The test suite wrote to the live database
+
+**Severity: medium. Status: fixed.**
+
+Nine tests opened the application's own database session, and nothing redirected
+it, so every test run wrote into the real SQLite file. Governance fixtures, a
+failed gap run against a fixture document named `std`, and a human-verification
+decision on a hardcoded run ID were all test output sitting among real data.
+They could only be told apart by matching timestamps to the test source.
+
+Two test modules also imported the application under a different package path
+from the other 38, so they could not be collected at all. One of them was the
+grounding validator suite.
+
+**Fix.** Test configuration redirects every storage path and the vector
+collection to a temporary location before the application is imported, and
+asserts that it did. The suite runs inside the backend image with the source
+mounted read-only, so a regression in the isolation fails instead of writing.
+Verified: the database file's SHA-256 is identical before and after a full run.
+
+---
+
+## 7. Embedding configuration was inconsistent three ways
+
+**Severity: high. Status: fixed.**
+
+`EMBEDDING_MODEL_ID` defaulted to mxbai-embed-large with `EMBEDDING_VECTOR_SIZE`
+1024, `main.py` hardcoded `ensure_collection(vector_size=1536)`, and
+`.env.example` selected a 1536-dimension model without touching the size. The
+reference stack worked only because the hardcoded value happened to match its
+`.env`. A deployment on the defaults would have created a 1536 collection for a
+1024 model, and every write would have failed.
+
+`ensure_collection` returned success for any existing collection without
+comparing its vector size, which is what kept this invisible.
+
+The same class of error applied to the model tag: `LLM_MODEL_ID` defaulted to
+`qwen2.5:7b-instruct-fixed`, a local Modelfile that no longer exists, so a fresh
+install could not pull the model its own configuration named.
+
+**Fix.** The dimension is derived from the model id, and an explicit override
+that contradicts a known model fails at startup. `ensure_collection` compares
+sizes and refuses a mismatch, naming the reset endpoint. Model tags are now
+pullable from the registry.
+
+Verified live: the startup guard refused a stale 1536 collection with an
+actionable error, `POST /api/v1/admin/reset-vector-store` migrated it to 1024,
+and the next start was clean.
+
+---
+
+## 8. Health reported ok on a stack that could not ingest
+
+**Severity: medium. Status: fixed.**
+
+Found immediately after the guard above started working. The guard logged that
+the collection was unusable and ingestion would fail, and `/meta/health`
+returned `status: "ok"` with `vectorStore: "ok"` at the same moment, because the
+check only proved the server was reachable.
+
+Monitoring would have stayed green on a deployment that could not accept a
+single document.
+
+**Fix.** Health compares the collection's vector size with the configured model
+and reports `vectorStore: "degraded"` with a detail message, which makes overall
+status `degraded` rather than `ok`. An absent or unreadable collection is still
+reported as ok, since that is not evidence of a mismatch.
+
+---
+
+## 9. A timed-out analysis reported success, with a readiness score
+
+**Severity: high. Status: fixed.**
+
+On a real CPU-only run, every gap-analysis LLM call exceeded its timeout. The
+endpoint returned HTTP 200, zero findings, `Unknown` alignment, and a **readiness
+score**. Nothing in the response distinguished that from a document with no gaps,
+and the score reported readiness the run never established, because it was
+computed from an empty finding list.
+
+This is exactly the conflation the coverage engine avoids with `not_met` versus
+`not_assessed`, reintroduced one layer above it.
+
+**Fix.** The summary carries `analysis_complete` and `incomplete_reasons`, and
+readiness is not scored when the pass was incomplete.
+
+---
+
+## 10. CPU-only inference cannot run the gap engines
+
+**Severity: medium. Status: documented, not a software defect.**
+
+Measured on an M3 with the containerised Ollama: ingestion, retrieval and RAG
+chat all work, with a chat answer in about 35 seconds. Every gap-analysis LLM
+call exceeded its 120 second budget, so all three engines returned zero findings.
+
+**On macOS the containerised Ollama has no GPU access at all.** Metal is not
+available inside Linux containers, so the service runs on CPU even on Apple
+Silicon. The documentation previously called a GPU "recommended"; for the
+LLM-backed engines it is required. A Mac host should run Ollama natively and
+point the backend at it.
+
+The deterministic coverage engine is unaffected, because it makes no LLM calls.
+
+---
+
+## 11. No LLM interaction was ever logged
+
+**Severity: high. Status: fixed.**
+
+`llm_interactions` was empty in every database inspected, and the audit-binding
+log is what `06-evals.md` depended on for grounding statistics.
+
+Two independent causes. The gateway appended interactions to an in-memory list
+and never wrote them; only two explanation paths persisted rows of their own, so
+Copilot and drafting left no trace. And Copilot explanation queries, the ones
+that actually use the gateway, returned HTTP 500 before reaching it.
+
+The 500 came from a field-naming mismatch. Snapshots store evidence spans as
+`startChar`, `endChar` and `quote`, with the offsets routinely null because the
+engine records the quote rather than character positions. The reader looked for
+`start_char`, `end_char` and `span_text`, so every lookup missed, `end_char`
+defaulted to 0, and the model requires it above 0. An unhandled
+`ValidationError` took the request down.
+
+The two faults hid each other: with the query failing at 500, the absent
+persistence produced no symptom to investigate.
+
+**Fix.** The gateway persists each interaction in its own transaction. Spans are
+read under either naming, `end_char` is derived from the quote when absent, and
+an uncitable span is skipped rather than raising.
+`REQUIRE_LLM_INTERACTION_LOG` (default on) treats a failed log write as a
+generation failure, so the product does not serve output the audit log has no
+record of.
+
+Verified: the query returns 200 with a grounded answer and a citation, writes a
+`copilot_narrative` row with `grounding_passed=1`, and the pass rate is now a
+query against the log.
+
+No migration was needed. `run_id` is still a non-null foreign key to `gap_runs`,
+and every user-facing caller supplies a registered run now that the orchestrator
+uses the tracked run id.
+
+---
+
 ## Open items
 
 | Item | Severity | Note |
 |---|---|---|
-| Snapshot hashes never re-verified | Medium | Provenance stamp, not tamper detection |
+| Audit bundles unsigned | Low | Hashes are verified on load, but unkeyed, so a forger who recomputes them is not caught |
+| Timeout settings sprawl | Medium | Seven separate timeouts; the documented `GAP_LLM_TIMEOUT` does not affect the advanced engines, which use `ADV_GAP_LLM_CALL_TIMEOUT_SEC` |
+| No schema migration tool | Medium | Schema changes are manual; Alembic is absent. Not required for anything above, but the next structural change will need it |
+| Document `chunkCount` always 0 | Low | Chunks live in the vector store; the count reads an unpopulated table |
+| Run progress stuck at 5% | Low | Stage is not updated past alignment, so a long run looks hung |
+| Qdrant client/server skew | Low | Client 1.19 against server 1.9.2, outside the supported range |
+| US guide data absent from the image | Low | The Dockerfile copies only the application, so US-guide enrichment finds no data |
 | Snapshot replay not implemented | Medium | Compare and export exist |
 | Vector store in source repo history | Medium | Contained: repo has no remote and is never pushed |
 | Snapshot immutability by convention | Low | Single write path, no constraint enforcing it |
