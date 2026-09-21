@@ -52,6 +52,32 @@ verification described in [`05-failure-modes.md`](05-failure-modes.md). Not
 averaged across runs or hardware. Model pull time is excluded and dominates real
 first-boot time: roughly 7.7 GB across three models.
 
+### End-to-end verification, 21 September 2026
+
+Full pipeline exercised against two synthetic drug documents (a CCDS as the
+reference, an EU SmPC-style local label as the document under review), on an M3
+with 16 GB, natively served models, image 0.1.2.
+
+| Step | Result |
+|---|---|
+| Upload and ingest 2 documents | 13 chunks, 1024 dimensions |
+| RAG chat | grounded answer with 2 citations, ~11 s warm |
+| Advanced gap run | SUCCEEDED, ~8 minutes |
+| Deterministic coverage | **32 requirements**: 12 ISO 14971, 14 MDR GSPR, 6 MDR |
+| Deterministic findings | 16, including 4 critical ISO 14971 |
+| LLM findings | 5 across the generic and drug-label engines |
+| Audit bundle | HTTP 200, `coverage_hashes_verified: true`, 32 items |
+| Tamper detection | Flipping a stored status to `met` produced `verified: false` naming that requirement; restoring it returned `true` |
+
+The same run on the containerised, CPU-only Ollama took about 30 minutes, every
+LLM engine exceeded its budget and returned zero findings, and the deterministic
+coverage matrix was produced in full regardless. That is the clearest evidence
+for the determinism boundary: the model contributed nothing and the compliance
+engine still produced all 32 requirements and 16 findings.
+
+Single observations on one host, not averaged, and not a substitute for the
+accuracy measurement below.
+
 ---
 
 ## Not measured
