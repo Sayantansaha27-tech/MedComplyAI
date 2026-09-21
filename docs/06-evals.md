@@ -80,25 +80,81 @@ accuracy measurement below.
 
 ---
 
+## Benchmarked
+
+### Coverage classifier detection, 21 September 2026
+
+104 cases over all 26 deterministic requirements (12 ISO 14971, 14 MDR GSPR),
+four per requirement: the literal target phrasing present, the same content
+paraphrased, the keyword present inside a negation, and unrelated content.
+
+**Ground truth is true by construction.** Each fixture was authored to contain or
+omit the artifact, so no regulatory judgement is embedded in the labels. Scored as
+detection (`met` or `partial`) rather than exact status, because the met/partial
+split turns on evidence-quality heuristics that construction cannot adjudicate.
+
+| Case type | Precision | Recall | n |
+|---|---|---|---|
+| Literal phrasing present | 1.00 | **1.00** | 26 |
+| Content paraphrased | 1.00 | **0.08** | 26 |
+| Keyword inside a negation | — | — | **26/26 correctly not detected** |
+| Unrelated content | — | — | **26/26 correctly not detected** |
+| **Overall** | **1.00** | 0.54 | 104 |
+
+Per framework: ISO 14971 precision 1.00, recall 0.58. MDR GSPR precision 1.00,
+recall 0.50. Identical across repeated runs, which is the determinism claim in
+[ADR-002](03-decisions.md) measured rather than asserted.
+
+**Method.** `backend/scripts/eval_coverage.py` calls the same two functions
+`run_advanced_gap_analysis` calls, so it measures production code rather than a
+reimplementation. Section titles in fixtures are neutral: the evaluators match
+cues against the title as well as the body, and a title naming the requirement
+leaks the answer. The first run had that flaw and reported precision 0.52 partly
+as an artifact of it.
+
+**What this establishes.** The engine does not invent coverage. No fixture
+produced a false `met`, including the 26 that state the artifact is absent. It
+detects the artifact whenever the target phrasing is present.
+
+**What it does not establish.** Whether the requirement definitions are
+regulatorily correct. A classifier can score 1.00 here while checking for the
+wrong thing, and construction-based fixtures cannot detect that. See below.
+
+**The real limitation it exposes.** Recall on paraphrased content is 0.08. A
+document that describes the artifact in its own words is largely invisible to the
+classifiers. Real documents often carry informative headings, which the evaluators
+also read, so production recall is probably better than 0.08 — but by an unmeasured
+margin.
+
+---
+
 ## Not measured
 
 Stated plainly rather than left as an implication.
 
-### Coverage classification accuracy
+### Regulatory correctness of the requirement definitions
 
-There is no labelled test set. Precision and recall of the ISO 14971 and MDR
-Annex I classifiers against expert-assigned ground truth are unknown.
+Detection is now benchmarked; correctness is not. Nothing has established that a
+requirement, when the engine marks it met, is met *in the sense the regulation
+intends*. That is a judgement about whether the keyword sets, structural checks and
+acceptance rules encode the clause faithfully, and construction-based fixtures
+cannot answer it: they only confirm the engine finds what it was told to look for.
 
-This is the most important missing number. The determinism argument in
-[ADR-002](03-decisions.md) establishes that the system gives the *same* answer
-every time. It does not establish that the answer is *correct*. Those are
-different properties and only one of them has been demonstrated.
+The determinism argument in [ADR-002](03-decisions.md) shows the system gives the
+same answer every time. The benchmark above shows it does not invent coverage.
+Neither shows the answer is regulatorily right.
 
-**What it would take.** Perhaps 50 to 100 requirement-document pairs labelled by
-a qualified reviewer, held out, scored for precision and recall per requirement
-class. The evaluators are deterministic, so the run is cheap and repeatable once
-the labels exist. The labelling is the expensive part and is the reason it has not
-been done.
+**What it would take.** 50 to 100 requirement-document pairs labelled by a
+qualified reviewer, against real dossier text rather than authored fixtures, held
+out and scored per requirement. The evaluators are deterministic, so the run is
+cheap and exactly repeatable once the labels exist. The labelling is the expensive
+part and remains the reason this is open.
+
+### Recall on real documents
+
+The paraphrase figure above (0.08) is a floor, not an estimate: fixtures use
+neutral headings while real documents carry informative ones the evaluators also
+read. The true production recall is somewhere above it and unmeasured.
 
 ### Grounding validator effectiveness
 
@@ -155,9 +211,10 @@ and its cycle time, and those are different claims.
 
 **Priority order for closing it:**
 
-1. **Labelled coverage set.** 50 to 100 requirement-document pairs scored by a
-   qualified reviewer. Unblocks precision and recall, and the evaluators are
-   deterministic so the run is cheap and repeatable once labels exist.
+1. **Expert-labelled coverage set.** 50 to 100 requirement-document pairs scored
+   by a qualified reviewer against real dossier text. The harness and scoring
+   already exist (`backend/scripts/eval_coverage.py`); only the labels are
+   missing. This is what turns detection benchmarking into a correctness claim.
 2. **Grounding statistics.** Unblocked: every gateway interaction is now
    persisted with its `grounding_passed` result. What remains is accumulating
    enough real traffic for the rate to mean anything.

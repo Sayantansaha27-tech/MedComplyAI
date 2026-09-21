@@ -380,6 +380,54 @@ uses the tracked run id.
 
 ---
 
+## 12. A stated absence counted as evidence of presence
+
+**Severity: high. Status: fixed.**
+
+Found by building an evaluation harness rather than by a report. Of 26 fixtures
+stating "No <artifact> has been prepared for this device", **24 were scored
+`met`**. The document said the artifact did not exist and the deterministic engine
+reported the requirement satisfied.
+
+This is the worst direction for the failure to run in. An under-reported
+requirement costs a reviewer time; an over-reported one removes the finding that
+should have prompted work, and the coverage matrix is the part of the product a
+reviewer is meant to be able to trust without re-reading the dossier.
+
+The cause was that keyword matching has no notion of negation. `risk management
+plan` matched, so the clause counted, regardless of the word "No" in front of it.
+
+**Fix.** A keyword occurrence is suppressed when a negation cue sits close before
+it in the same clause, or when a verb of existence is negated just after it. The
+rule is narrow on purpose, and both directions are pinned by tests: "excluded" is
+not a cue, or "no hazards were excluded from the hazard identification review"
+would negate the artifact it evidences; the after-keyword check matches only
+existence verbs, or "risk control measures are not optional" would be read as
+their absence. Evidence is suppressed only when every occurrence is negated, so
+one clean mention still counts.
+
+Suppressing evidence can only move a status toward `not_met`, so the residual risk
+is under-reporting coverage rather than asserting coverage that is not there.
+
+Measured before and after, construction-based and deterministic:
+
+| | before | after |
+|---|---|---|
+| Overall precision | 0.52 | **1.00** |
+| Negated fixtures scored `met` | 24 of 26 | **0 of 26** |
+| Literal-present recall | 0.92 | **1.00** |
+
+**Two things this says about the engine that are worth keeping.** It never
+produced a false `met` on unrelated content, before or after the fix. And three
+requirements refused thin evidence outright: RISK_ESTIMATION, TRACEABILITY and
+PMS_FEEDBACK_LINK return nothing without their structural elements, so the engine
+is stricter than a keyword matcher where it matters most.
+
+The open weakness is recall, not precision: paraphrased content is detected in 2
+of 26 cases. See [`06-evals.md`](06-evals.md).
+
+---
+
 ## Open items
 
 | Item | Severity | Note |
