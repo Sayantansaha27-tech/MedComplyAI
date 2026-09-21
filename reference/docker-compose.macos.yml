@@ -1,0 +1,40 @@
+# ============================================================
+# MedComplyAI - macOS host: use a natively installed Ollama
+#
+# The containerised Ollama has no GPU access on macOS. Metal is not available
+# inside Linux containers, so the `ollama` service runs on CPU even on Apple
+# Silicon, and CPU-only inference is not fast enough for the gap-analysis
+# engines: every call exceeds its budget and the engines return no findings.
+#
+# This overlay points the backend at an Ollama running on the host, which does
+# use Metal. The base file's `environment:` block takes precedence over
+# `env_file`, so setting OLLAMA_URL in .env alone has no effect; it has to be
+# overridden here.
+#
+# Prerequisites on the host:
+#   brew install ollama            # or the official installer
+#   ollama pull qwen2.5:7b-instruct
+#   ollama pull mxbai-embed-large:latest
+#
+# Usage:
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.macos.yml \
+#     up -d
+#
+# The `ollama` container still starts and is simply unused. Stop it with
+# `docker compose stop ollama` if you want the memory back.
+#
+# On Linux with an NVIDIA GPU, use docker-compose.gpu.yml instead.
+# ============================================================
+
+services:
+
+  backend:
+    environment:
+      OLLAMA_URL: http://host.docker.internal:11434
+    # The host's Ollama is not a compose service, so there is nothing to wait
+    # for beyond the vector store.
+    depends_on:
+      qdrant:
+        condition: service_healthy

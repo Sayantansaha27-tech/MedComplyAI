@@ -623,16 +623,43 @@ Then open `http://localhost:3000`.
 ### Overlays
 
 ```bash
-# NVIDIA GPU acceleration for Ollama
+# NVIDIA GPU acceleration for Ollama (Linux host with the container toolkit)
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+# macOS host: use a natively installed Ollama, which does use Metal
+docker compose -f docker-compose.yml -f docker-compose.macos.yml up -d
 
 # Langfuse LLM observability, dashboard on :3030
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 ```
 
+The macOS overlay is needed because the base file's `environment:` block takes
+precedence over `env_file`, so setting `OLLAMA_URL` in `.env` alone has no
+effect. Stop the unused `ollama` container afterwards with
+`docker compose stop ollama`; see the memory note below.
+
 The observability overlay requires `LANGFUSE_NEXTAUTH_SECRET`, `LANGFUSE_SALT`,
 and `LANGFUSE_DB_PASSWORD`. It refuses to start if any is unset or empty rather
 than falling back to a default. Generate each with `openssl rand -base64 32`.
+
+### Measured inference performance
+
+On an M3 with 16 GB, qwen2.5:7b-instruct served by a natively installed Ollama:
+
+| | |
+|---|---|
+| Generation, model resident, container Ollama stopped | **19.2 tok/s** |
+| Generation with the unused container Ollama still running | **7.1 tok/s** |
+| Cold model load under memory pressure | 106 s |
+| RAG chat answer, cold | ~36 s |
+| RAG chat answer, warm | ~11 s |
+
+The middle row is the one to plan around. Docker Desktop and a native Ollama
+compete for the same 16 GB, and leaving the unused container running cost 2.7x
+in throughput and turned a negligible model load into 106 seconds. On a 16 GB
+host, run one Ollama, not two.
+
+Single observations on one host, not averaged.
 
 ### Operational notes
 

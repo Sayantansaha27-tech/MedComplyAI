@@ -56,12 +56,20 @@ Mac host, run Ollama natively and set
 The base file runs everywhere. Two opt-in overlays add capability:
 
 ```bash
-# NVIDIA GPU acceleration for Ollama
+# NVIDIA GPU acceleration for Ollama (Linux host with the container toolkit)
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+# macOS host: point the backend at a natively installed Ollama, which uses Metal
+docker compose -f docker-compose.yml -f docker-compose.macos.yml up -d
 
 # Langfuse LLM observability
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 ```
+
+The macOS overlay has to override `OLLAMA_URL` in `environment:`, because that
+block takes precedence over `env_file` and setting it in `.env` has no effect.
+Stop the unused `ollama` container afterwards: on a 16 GB host, leaving two
+Ollamas resident cost 2.7x in generation throughput (7.1 against 19.2 tok/s).
 
 Both are separate files rather than compose profiles, for reasons that cost
 real debugging time and are worth stating.
