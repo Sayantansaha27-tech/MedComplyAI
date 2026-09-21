@@ -341,13 +341,52 @@ The deterministic coverage engine is unaffected, because it makes no LLM calls.
 
 ---
 
+## 11. No LLM interaction was ever logged
+
+**Severity: high. Status: fixed.**
+
+`llm_interactions` was empty in every database inspected, and the audit-binding
+log is what `06-evals.md` depended on for grounding statistics.
+
+Two independent causes. The gateway appended interactions to an in-memory list
+and never wrote them; only two explanation paths persisted rows of their own, so
+Copilot and drafting left no trace. And Copilot explanation queries, the ones
+that actually use the gateway, returned HTTP 500 before reaching it.
+
+The 500 came from a field-naming mismatch. Snapshots store evidence spans as
+`startChar`, `endChar` and `quote`, with the offsets routinely null because the
+engine records the quote rather than character positions. The reader looked for
+`start_char`, `end_char` and `span_text`, so every lookup missed, `end_char`
+defaulted to 0, and the model requires it above 0. An unhandled
+`ValidationError` took the request down.
+
+The two faults hid each other: with the query failing at 500, the absent
+persistence produced no symptom to investigate.
+
+**Fix.** The gateway persists each interaction in its own transaction. Spans are
+read under either naming, `end_char` is derived from the quote when absent, and
+an uncitable span is skipped rather than raising.
+`REQUIRE_LLM_INTERACTION_LOG` (default on) treats a failed log write as a
+generation failure, so the product does not serve output the audit log has no
+record of.
+
+Verified: the query returns 200 with a grounded answer and a citation, writes a
+`copilot_narrative` row with `grounding_passed=1`, and the pass rate is now a
+query against the log.
+
+No migration was needed. `run_id` is still a non-null foreign key to `gap_runs`,
+and every user-facing caller supplies a registered run now that the orchestrator
+uses the tracked run id.
+
+---
+
 ## Open items
 
 | Item | Severity | Note |
 |---|---|---|
 | Audit bundles unsigned | Low | Hashes are verified on load, but unkeyed, so a forger who recomputes them is not caught |
 | Timeout settings sprawl | Medium | Seven separate timeouts; the documented `GAP_LLM_TIMEOUT` does not affect the advanced engines, which use `ADV_GAP_LLM_CALL_TIMEOUT_SEC` |
-| Gateway interactions not persisted | Medium | Only two explanation paths write the log; Copilot keeps it in memory. Its table also has a non-null foreign key to `gap_runs`, so use cases without a run cannot be logged without a schema change |
+| No schema migration tool | Medium | Schema changes are manual; Alembic is absent. Not required for anything above, but the next structural change will need it |
 | Document `chunkCount` always 0 | Low | Chunks live in the vector store; the count reads an unpopulated table |
 | Run progress stuck at 5% | Low | Stage is not updated past alignment, so a long run looks hung |
 | Qdrant client/server skew | Low | Client 1.19 against server 1.9.2, outside the supported range |
