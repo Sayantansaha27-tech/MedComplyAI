@@ -180,6 +180,11 @@ the retrieved set. Chunking and hybrid retrieval decisions in
 [ADR-003](03-decisions.md) and [ADR-004](03-decisions.md) were made on domain
 reasoning, not on an ablation.
 
+Any impression of retrieval quality formed before 29 September 2026 describes
+keyword retrieval alone: dense search returned nothing in every published image
+until then (see [failure mode 13](05-failure-modes.md)). Hybrid retrieval has
+only been working, and so only been measurable, since.
+
 ### Model comparison
 
 Qwen 2.5 7B was selected on licence, size, and local-inference fit. No
