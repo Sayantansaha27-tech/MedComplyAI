@@ -686,8 +686,8 @@ Key settings:
 | `EMBEDDING_MODEL_ID` | `mxbai-embed-large:latest` | Embedding model tag |
 | `GLASSBOX_ENABLED` | `true` | Enable grounding validation |
 | `GROUNDING_BLOCK_ON_FAILURE` | `true` | Reject ungrounded outputs |
-| `ANSWER_VERIFICATION_MODE` | `full` | Check each chat sentence against its sources: `off`, `numeric` (numbers and units only), or `full` (adds the fact-checking model; falls back to `numeric` if it is not installed) |
-| `ANSWER_VERIFIER_MODEL` | `bespoke-minicheck:7b` | Local fact-checking model, pulled with `ollama pull bespoke-minicheck:7b` |
+| `ANSWER_VERIFICATION_MODE` | `full` | Check each chat sentence against its sources: `off`, `numeric` (numbers and units only), or `full` (adds a model check per statement and per document; falls back to `numeric` if the model is unavailable) |
+| `ANSWER_VERIFIER_MODEL` | unset (the chat model) | Model that checks each statement. The chat model is the default: on a 16 GB host a second 7B model forces a swap on every answer. Set `bespoke-minicheck:7b` where memory allows, for a verifier independent of the generator |
 | `ENABLE_ISO14971_AUDIT` | `true` | Enable ISO 14971 advanced audit |
 | `ENABLE_MDR_GSPR_AUDIT` | `true` | Enable MDR Annex I audit |
 | `ENABLE_LANGFUSE` | `false` | Enable Langfuse observability |
