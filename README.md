@@ -10,7 +10,7 @@ The deployment topology in [`reference/`](reference/) is real and runnable. Qdra
 and Ollama start for anyone. The backend and frontend pull private images and need
 registry access. See [Deployment](#deployment).
 
-MedComplyAI turns a pile of regulatory documents (MDR, 510(k), ISO 14971, ISO 13485, CTD modules, drug labeling, IFUs) into a living, auditable compliance intelligence system. No cloud LLM APIs. No data leaves your environment. Every AI output is grounded, cited, and revision-tracked.
+MedComplyAI turns a pile of regulatory documents (MDR, 510(k), ISO 14971, ISO 13485, CTD modules, drug labeling, IFUs) into a living, auditable compliance intelligence system. No cloud LLM APIs. No data leaves your environment. AI output is cited to its sources, checked against them, and revision-tracked.
 
 ---
 
@@ -61,7 +61,7 @@ So the system is designed from the evidence up:
 
 - **Chunking is structural**, not arbitrary. Documents are split at section boundaries with hierarchy preserved (section path, section number, semantic label). Every chunk knows what it is.
 - **Coverage decisions are deterministic.** For ISO 14971 and MDR Annex I, the coverage decision is made by deterministic keyword classifiers that mirror how a human auditor reads the document. Those two evaluators contain no LLM calls at all, and no LLM writes a status, verdict, or coverage field anywhere in the system. LLMs are called only to explain or narrate. The scope matters: other frameworks route through a schema-agnostic path where the model does propose a finding severity, which is why this claim names ISO 14971 and MDR Annex I specifically rather than the whole product.
-- **Every AI output is grounded-validated before it reaches the user.** The LLM Gateway enforces a grounding contract: the model must cite evidence IDs that actually exist in the retrieved context. Ungrounded outputs are blocked, not just flagged.
+- **AI output that makes claims about your documents is checked against them, in two different ways.** Gap-analysis explanations, Copilot narratives and drafts go through the LLM Gateway, which enforces a grounding contract (the model must cite evidence IDs that actually exist in the retrieved context) and blocks ungrounded output rather than flagging it. Chat answers do not pass through the gateway. Instead every sentence is checked against the source documents: numbers and units deterministically, wording by a local fact-checking model, per document, so a statement true of one label and not another is shown as such. Unsupported statements are flagged beside the answer, which is never silently rewritten. The scope matters here too: remediation drafts propose *new* text, which cannot be grounded against documents that do not contain it yet, so they bypass both checks and are labelled as drafts for review by a qualified professional.
 - **All state is append-only snapshots.** A compliance run produces a versioned, hash-verified snapshot: the payload is canonically serialised and SHA-256 hashed, and that hash binds every downstream LLM interaction to the exact engine state it was generated from. Snapshots can be compared across runs and exported as an audit bundle. There is a single write path and no update or delete, so nothing rewrites what the system decided and why. Loading an audit bundle recomputes every coverage item's hash and reports any mismatch in the bundle's integrity block, so a stored status edited after the fact is detected. Two honest limits: the hash is unkeyed, so an edit that also recomputes it is not caught, which needs the bundle signed; and snapshot replay is not implemented.
 
 ### Why local models?
@@ -682,10 +682,12 @@ Key settings:
 |---|---|---|
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant vector DB URL |
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama inference URL |
-| `LLM_MODEL_ID` | `qwen2.5:7b-instruct-fixed` | Main LLM model tag |
-| `EMBEDDING_MODEL_ID` | `rjmalagon/gte-qwen2-1.5b-instruct-embed-f16` | Embedding model tag |
+| `LLM_MODEL_ID` | `qwen2.5:7b-instruct` | Main LLM model tag |
+| `EMBEDDING_MODEL_ID` | `mxbai-embed-large:latest` | Embedding model tag |
 | `GLASSBOX_ENABLED` | `true` | Enable grounding validation |
 | `GROUNDING_BLOCK_ON_FAILURE` | `true` | Reject ungrounded outputs |
+| `ANSWER_VERIFICATION_MODE` | `full` | Check each chat sentence against its sources: `off`, `numeric` (numbers and units only), or `full` (adds a model check per statement and per document; falls back to `numeric` if the model is unavailable) |
+| `ANSWER_VERIFIER_MODEL` | unset (the chat model) | Model that checks each statement. The chat model is the default: on a 16 GB host a second 7B model forces a swap on every answer. Set `bespoke-minicheck:7b` where memory allows, for a verifier independent of the generator |
 | `ENABLE_ISO14971_AUDIT` | `true` | Enable ISO 14971 advanced audit |
 | `ENABLE_MDR_GSPR_AUDIT` | `true` | Enable MDR Annex I audit |
 | `ENABLE_LANGFUSE` | `false` | Enable Langfuse observability |

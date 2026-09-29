@@ -428,6 +428,82 @@ of 26 cases. See [`06-evals.md`](06-evals.md).
 
 ---
 
+## 13. Dense retrieval returned nothing, on every query
+
+**Severity: high. Status: fixed.**
+
+This was listed below as a low-severity open item, "client/server skew". It was
+not low. `qdrant-client` was unpinned, so image builds installed 1.19, while the
+Qdrant server is pinned to 1.9.2 in the reference compose file. The 1.19 client
+searches with `query_points`, an endpoint that does not exist before server 1.10,
+and it no longer has the older `search` call at all. Every dense search therefore
+returned 404, and a broad exception handler turned each one into an empty result
+list.
+
+So hybrid retrieval, fusion of vector and keyword results, was keyword retrieval
+alone. Embeddings were computed and stored at ingestion and never searched. The
+only visible traces were a compatibility warning printed on every call and a log
+line reading `Retrieved 0 unique dense results`. The test suite passed throughout,
+because it replaces the vector store with a stub, and its image carried the same
+broken client.
+
+Found by running a real chat query and reading the retrieval log, not by a test.
+
+**Fix.** The client is pinned to the server's version, and the search call uses
+whichever API the installed client provides, so a later server upgrade needs no
+code change. After the fix, the same query returns 13 dense results alongside 5
+keyword results, with both score types non-zero. Upgrading the server instead was
+rejected for now: Qdrant only guarantees storage compatibility across one minor
+version, so moving existing 1.9 stores past 1.10 means a stepwise, irreversible
+migration of customer data.
+
+---
+
+## 14. The FDA 820 checklist cited a repealed regulation
+
+**Severity: medium. Status: fixed, pending regulatory review.**
+
+The 21 CFR 820 checklist cited 13 sections of the Quality System Regulation:
+820.20, 820.30, 820.100, 820.198 and the rest. FDA removed all of them on
+2 February 2026, when the Quality Management System Regulation took effect.
+Current Part 820 incorporates ISO 13485:2016 by reference and adds a few
+supplemental requirements; 820.20 to 820.30 are now reserved. Eight months later,
+anyone enabling this audit would have been given gaps against sections they could
+not find in the regulation.
+
+Severity is medium rather than high because the checklist is off by default and
+does not run in production.
+
+**Fix.** Rewritten from the text of current Part 820 retrieved from the eCFR: the
+QSR topics are remapped to the ISO 13485 clauses that now carry them, and the four
+requirements FDA added on top of ISO 13485 are new, among them labeling and
+packaging controls, which FDA added because it found ISO 13485 inadequate there.
+It stays off until a qualified reviewer has read it.
+
+To stop a repeat, every Title 21 citation in every checklist, 48 across 16 parts,
+is now resolved against a snapshot of the eCFR table of contents in the test suite,
+honouring reserved ranges, and a script re-checks them against the live eCFR.
+
+---
+
+## 15. The remediation endpoint failed on every request
+
+**Severity: medium. Status: fixed.**
+
+`POST /gap/remediate` read a field the finding model does not define, so it raised
+on every call and returned HTTP 500 for any input. No test had built a prompt from
+a real finding. It also had a fallback that returned unparsed model output as the
+remediation "brief" with low confidence, so a refusal or a truncated generation
+would have reached the user as regulatory guidance. It now refuses unparseable
+output instead of passing it on.
+
+Once working, this endpoint returns AI-drafted text that is not grounded against
+documents, which made the README's claim that every AI output is
+grounding-validated untrue. The claim now states what is checked and how, and
+names remediation drafts as the exception.
+
+---
+
 ## Open items
 
 | Item | Severity | Note |
@@ -437,7 +513,6 @@ of 26 cases. See [`06-evals.md`](06-evals.md).
 | No schema migration tool | Medium | Schema changes are manual; Alembic is absent. Not required for anything above, but the next structural change will need it |
 | Document `chunkCount` always 0 | Low | Chunks live in the vector store; the count reads an unpopulated table |
 | Run progress stuck at 5% | Low | Stage is not updated past alignment, so a long run looks hung |
-| Qdrant client/server skew | Low | Client 1.19 against server 1.9.2, outside the supported range |
 | US guide data absent from the image | Low | The Dockerfile copies only the application, so US-guide enrichment finds no data |
 | Snapshot replay not implemented | Medium | Compare and export exist |
 | Vector store in source repo history | Medium | Contained: repo has no remote and is never pushed |

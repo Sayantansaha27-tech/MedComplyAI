@@ -126,6 +126,53 @@ classifiers. Real documents often carry informative headings, which the evaluato
 also read, so production recall is probably better than 0.08 — but by an unmeasured
 margin.
 
+### Answer verification and label comparison, 29 September 2026
+
+Chat answers are checked sentence by sentence against the documents they cite,
+and a reference label can be compared with a local label statement by statement.
+Both use the same two tiers: deterministic rules (every number and unit must
+appear in the sources, and no word may be a look-alike of a substance or product
+name in them), then a local model asked whether each document supports each
+statement.
+
+**Chat claims:** 46 construction-based claims against the two reference labels,
+21 true and 25 not. The false ones are dose and unit substitutions, look-alike
+drug names, contradictions, fabrications, and statements true of one label but
+not the other.
+
+| | Recall | False flags | Median per check |
+|---|---|---|---|
+| Rules only | 0.44 | 0 of 21 | none |
+| Rules + chat model (qwen2.5:7b, default) | **1.00** | **0 of 21** | 314 ms |
+| Rules + Bespoke-MiniCheck-7B | 0.96 | 0 of 21 | 400 ms, plus a 14 s model swap on 16 GB |
+
+The rules alone never flagged a true claim, and caught every dose, unit and
+look-alike substitution. The model tier catches what rules cannot: contradictions,
+fabrications, and cross-label statements.
+
+**Label comparison:** the 51 statements of the reference CCDS checked against the
+EU SmPC. 7 partial matches are marked ambiguous and not scored. Of the 44 scored,
+38 are deviations. Precision 0.97, recall 0.97, with one of six present
+statements flagged. The two disagreements with the answer key are both
+defensible: a fever indication the SmPC carries without the CCDS's 40 kg weight
+floor, and a contraindication the SmPC downgrades to a warning, which a checker
+that does not read section context cannot see.
+
+**On the running stack.** Asked the same dose question three times, the chat model
+wrote "paracetamol" where both labels say "paracetronil" four times; the name rule
+flagged all four. A correct side-by-side answer ("3000 mg (CCDS) / 4000 mg (EU
+SmPC)") is reported as supported only when the sources are read together, and a
+statement in one label and not the other is shown as such. One false flag
+remains: a terse fragment such as "EU SmPC: 7 days" is sometimes rejected
+although the SmPC says it. Verification adds 1 to 4 seconds to an answer.
+
+**What this does not establish.** The sets are small and synthetic, and the label
+answer key was written by an engineer, not a regulatory reviewer. The numbers
+show the design works on the failure types it targets; they are not a general
+accuracy claim. The chat model checking its own answers was the better verifier
+here, but a verifier independent of the generator remains the stronger argument
+in an audit, which is why MiniCheck stays available.
+
 ---
 
 ## Not measured
@@ -179,6 +226,11 @@ No measurement of recall@k, or of how often the correct evidence chunk appears i
 the retrieved set. Chunking and hybrid retrieval decisions in
 [ADR-003](03-decisions.md) and [ADR-004](03-decisions.md) were made on domain
 reasoning, not on an ablation.
+
+Any impression of retrieval quality formed before 29 September 2026 describes
+keyword retrieval alone: dense search returned nothing in every published image
+until then (see [failure mode 13](05-failure-modes.md)). Hybrid retrieval has
+only been working, and so only been measurable, since.
 
 ### Model comparison
 
